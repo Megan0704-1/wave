@@ -297,10 +297,10 @@ class HardwareConstraint(Constraint):
                 offset = mma_type.get_index_offset(lane, self.threads_per_wave)
             case MMAType.RDNA4_WAVE32_F16_16x16x16_F16:
                 offset = [ Piecewise( (lane % 16, ~MMA_ACC),
-                        (8 * floor(lane / 16), MMA_ACC),
+                        (8 * floor(lane / 16) + (GPR_NUM * 2), MMA_ACC),
                     ),  # M
                     lane % 16,  # N
-                    8 * floor(GPR_NUM / 2) + 4 * floor(lane / 16),  # K
+                    8 * floor(GPR_NUM / 2) + 4 * floor(lane / 16) + (GPR_NUM % 2),  # K
                 ]
             case MMAType.F32_16x16x16_F16 | MMAType.I32_16x16x16_I8:
                 offset = [
@@ -487,9 +487,9 @@ class HardwareConstraint(Constraint):
                 stride = mma_type.get_index_stride(self.threads_per_wave)
             case MMAType.RDNA4_WAVE32_F16_16x16x16_F16:
                 size = [
-                    Piecewise((1, ~MMA_ACC), (8, MMA_ACC)),  # M
+                    Piecewise((1, ~MMA_ACC), (4, MMA_ACC)),  # M
                     1,  # N
-                    8,  # K
+                    2,  # K
                 ]
                 stride = [
                     Piecewise((1, ~MMA_ACC), (16, MMA_ACC)),  # M
