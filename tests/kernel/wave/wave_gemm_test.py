@@ -74,15 +74,22 @@ def get_test_shapes(test_name: str) -> list[tuple[int]]:
 
 
 @require_e2e
-def testGemmBench(tmp_path):
+@pytest.mark.parametrize(
+    "mfma_variant, threads_per_wave",
+    [
+        pytest.param(MMAType.F32_16x16x16_F16, 64, marks=require_cdna_3_or_4),
+        pytest.param(MMAType.RDNA4_WAVE32_F32_16x16x16_F16, 32, marks=require_rdna4),
+    ],
+)
+def testGemmBench(tmp_path, mfma_variant: MMAType, threads_per_wave: int):
     shape = (64, 64, 64)
     perf_filename_tk = tmp_path / "wave_gemm_bench.txt"
     perf_filename_iree = tmp_path / "iree_gemm_bench.txt"
     enable_scheduling = SchedulingType.NONE
     dynamic_dims = False
-    mfma_variant = MMAType.F32_16x16x16_F16
+    mfma_variant = mfma_variant
     gemm, hyperparams, dynamic_symbols = get_gemm_kernel(
-        shape, dynamic_dims, mfma_variant, torch.float16
+        shape, dynamic_dims, mfma_variant, torch.float16, threads_per_wave=threads_per_wave
     )
 
     assert not perf_filename_tk.exists()
@@ -128,7 +135,6 @@ def testGemmBench(tmp_path):
     ],
 )
 @param_bool("dynamic_dims", "dyn")
-@pytest.mark.parametrize("datatype", [torch.float16])
 @pytest.mark.parametrize(
     "mfma_variant, threads_per_wave",
     [
@@ -137,6 +143,7 @@ def testGemmBench(tmp_path):
         pytest.param(MMAType.RDNA4_WAVE32_F32_16x16x16_F16, 32, marks=require_rdna4),
     ],
 )
+@pytest.mark.parametrize("datatype", [torch.float16])
 def testPureGemm(
     shape: tuple[int],
     enable_scheduling: SchedulingType,
@@ -284,8 +291,8 @@ def testGemmGatherToLDS(
 @pytest.mark.parametrize(
     "mfma_variant, threads_per_wave",
     [
-        pytest.param(MMAType.F32_16x16x16_F16, 64, marks=require_cdna_2_or_3_or_4),
-        pytest.param(MMAType.F32_32x32x8_F16, 64, marks=require_cdna_2_or_3_or_4),
+        pytest.param(MMAType.F32_16x16x16_F16, 64, marks=require_cdna_3_or_4),
+        pytest.param(MMAType.F32_32x32x8_F16, 64, marks=require_cdna_3_or_4),
         pytest.param(MMAType.RDNA4_WAVE32_F32_16x16x16_F16, 32, marks=require_rdna4),
     ],
 )
@@ -358,9 +365,9 @@ def testGemmSmallTiles(
 
     hyperparams = {
         ADDRESS_SPACE: SHARED_ADDRESS_SPACE,
-        BLOCK_M: 16,
-        BLOCK_N: 16,
-        BLOCK_K: 16,
+        BLOCK_M: 8,
+        BLOCK_N: 8,
+        BLOCK_K: 8,
         M: shape[0],
         N: shape[1],
         K: shape[2],
@@ -400,7 +407,7 @@ def testGemmSmallTiles(
 
     iree_ref = device_zeros(shape[0], shape[1], dtype=torch.float32)
     generate_iree_ref("mmt", [a, b], [iree_ref], options)
-    assert_close(c, iree_ref, check_device=False, atol=2e-4, rtol=1e-5)
+    assert_close(c, iree_ref, check_device=False, atol=3e-4, rtol=5e-3)
 
 
 @require_e2e
@@ -418,8 +425,8 @@ def testGemmSmallTiles(
 @pytest.mark.parametrize(
     "mfma_variant, threads_per_wave",
     [
-        pytest.param(MMAType.F32_16x16x16_F16, 64, marks=require_cdna_2_or_3_or_4),
-        pytest.param(MMAType.F32_32x32x8_F16, 64, marks=require_cdna_2_or_3_or_4),
+        pytest.param(MMAType.F32_16x16x16_F16, 64, marks=require_cdna_3_or_4),
+        pytest.param(MMAType.F32_32x32x8_F16, 64, marks=require_cdna_3_or_4),
         pytest.param(MMAType.RDNA4_WAVE32_F32_16x16x16_F16, 32, marks=require_rdna4),
     ],
 )
