@@ -31,6 +31,26 @@ When do we need a barrier?
     * If it has a consumer then this node will be treated like a producer.
     * Either case, barriers are expected to be inserted with the logic described above.
 
+Visualization: add_shared_memory_barriers
+--------------------
+- Basic barrier
+
+.. image:: basic_barrier_vis.gif
+    :width: 400
+    :alt: Basic barrier GIF
+    :align: center
+
+The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
+
+- Split barrier
+
+.. image:: split_barrier_vis.gif
+    :width: 400
+    :alt: Split barrier GIF
+    :align: center
+
+The above gif is an visaul illustration for inserting split barriers between producers and consumers.
+
 Heuristic: add_shared_memory_barriers
 --------------------
 The heuristic walks the graph in pre-order and proceeds as follows:
@@ -77,22 +97,14 @@ The heuristic walks the graph in pre-order and proceeds as follows:
     * No: noop
 - end of step 6, the end of `add_shared_memory_barriers` call.
 
-Visualization: add_shared_memory_barriers
+Corner Cases for split barriers:
 --------------------
-- Basic barrier
-
-.. image:: basic_barrier_vis.gif
-    :width: 400
-    :alt: Basic barrier GIF
-    :align: center
-
-The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
-
-- Split barrier
-
-.. image:: split_barrier_vis.gif
-    :width: 400
-    :alt: Split barrier GIF
-    :align: center
-
-The above gif is an visaul illustration for inserting split barriers between producers and consumers.
+Adding shared memory barriers when producer appear before consumer is straightforward. Things get tricky when nested region ops are involved and dependencies exist between root graph and subgraphs.
+A table below shows how split barriers are inserted for those cases.
++--------------+----------+-----------+-----------+
+| NestedRegionOp \ Description | signal | waits | when is barriers for subgraph inserted? |
++--------------+----------+-----------+-----------+
+| Iterate | subgraph prolog | subgraph epilog | when finish the second pass (exit check-next-iter mode)
++--------------+----------+-----------+-----------+
+| Conditional | subgraph prolog / subgraph epilog  | subgraph prolog / subgraph epilog | when producers or consumers are in the graph
++--------------+----------+-----------+-----------+
