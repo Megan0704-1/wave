@@ -77,4 +77,20 @@ The heuristic walks the graph in pre-order and proceeds as follows:
     * No: noop
 - end of step 6, the end of `add_shared_memory_barriers` call.
 
+Visualization: add_shared_memory_barriers
+--------------------
+- Basic barrier
+.. image:: basic\ barrier.gif
+    :width: 400
+    :alt: Basic barrier GIF
+    :align: center
 
+ The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
+
+- Split barrier
+.. image:: split\ barriers.gif
+    :width: 400
+    :alt: Split barrier GIF
+    :align: center
+
+ The above gif is an visaul illustration for inserting split barriers between producers and consumers.
