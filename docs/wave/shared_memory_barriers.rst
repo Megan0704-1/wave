@@ -6,13 +6,13 @@ To be more specific, cases like RAW (read after write), WAR (write after read), 
 
 Terminologies
 --------------------
-* Access types
+- Access types
     * Read (READ)
     * Write (WRITE)
     * Atomic (READ_WRITE)
     * GatherToLDS (Write but async)
 
-* Nested region op types
+- Nested region op types
     * Iterate
     * Conditional
 
@@ -40,62 +40,54 @@ The heuristic walks the graph in pre-order and proceeds as follows:
     * No: thank you, next. - jump to 0.
 
 2. Do we need a barrier relative to the last op on this memory?
-
-   * Yes:
-     Check if a barrier already exists in between producer and consumer.
-
-     * Yes: If a producer is an async op (GatherToLDS), then we upgrade the barrier (setting wait_async_ops=True), otherwise, noop.
-
-     * No:
-       Does this target support split barriers?
-
-       * Yes:
-         * Producer and consumer in a same graph: insert Signal after producer and wait before consumer.
-         * Producer and consumer not in a same graph: defer split barrier insertion to the `add_signal_wait_to_subgraph` pass.
-
-       * No: insert a single SharedMemoryBarrier before the consumer. Set `wait_async_ops` if needed.
-
-   * No: noop
+    * Yes: if a barrier already exists in between producer and consumer.
+        * Yes: If a producer is an async op (GatherToLDS) -> we upgrade the barrier (setting ```wait_async_ops=True```).
+        * No: Does this target support split barriers?
+            * Yes:
+                * Producer and consumer in a same graph: insert Signal after producer and wait before consumer.
+                * Producer and consumer not in a same graph: defer split barrier insertion to the `add_signal_wait_to_subgraph` pass.
+            * No: insert a single SharedMemoryBarrier before the consumer. Set `wait_async_ops` if needed.
+    * No: noop
 
 .. code-block:: sh 
+
     end of step 2, jump to setp 3.
 
 3. Update state
-
-   * update the last op that is taking ownership of the memory region.
-   * if we just saw a `GatherToLDS` op, set `state.is_async` to True, otherwise, after inserting a barrier, set it back to False.
+    * update the last op that is taking ownership of the memory region.
+    * if we just saw a `GatherToLDS` op, set `state.is_async` to True, otherwise, after inserting a barrier, set it back to False.
 
 .. code-block:: sh 
+
     end of step 3, jump to step 4.
 
 4. Is this op if of type NestedRegionOp (Iterate / Conditional)?
-
-   * Yes:
-     * Record a set of nodes that are currently taking ownership. This is used to compare if producers are updated in the subgraph.
-     * Recurse into its subgraph. - jump to step 0, recurse on the subgraph.
-     * After recursive call returns, there are some cases to consider: (ref. `should_insert_split_barrier_for_nested_region_op`)
-           * case 1: split barrier is not supported - jump to step 1
-           * case 2: producers are not updated in the subgraph - jump to step 1
-           * case 3: `next-iteration check` mode is set (by the Iterate node) - jump to step 1
-           * otherwise: calls `add_signal_wait_to_subgraph` pass for inserting signal at subgraph prolog and wait at subgraph epilog for synchronization.
-
-   * No: noop
+    * Yes:
+        * Record a set of nodes that are currently taking ownership. This is used to compare if producers are updated in the subgraph.
+        * Recurse into its subgraph. - jump to step 0, recurse on the subgraph.
+        * After recursive call returns, there are some cases to consider: (ref. `should_insert_split_barrier_for_nested_region_op`)
+            * case 1: split barrier is not supported - jump to step 1
+            * case 2: producers are not updated in the subgraph - jump to step 1
+            * case 3: `next-iteration check` mode is set (by the Iterate node) - jump to step 1
+            * otherwise: calls `add_signal_wait_to_subgraph` pass for inserting signal at subgraph prolog and wait at subgraph epilog for synchronization.
+    * No: noop
 
 .. code-block:: sh 
+
     end of step 4, jump to step 0.
 
 .. code-block:: sh 
+
    end of setp 0, jump to step 6.
 
 6. Is this graph a reductin graph? (ref. `is_reduction_subgraph`)
-
-   * Yes:
-     * If we are not already checking the next iteration (i.e. `next-iteration check` mode is unset) -> run the pass again with `checking_next_iter` flag set. (This makes is_shared_memory_op look one level deeper so we catch hazards like **iter i+1 reads what iter i writes** and insert the necessary barriers.)
-
-   * No: noop
+    * Yes:
+        * If we are not already checking the next iteration (i.e. `next-iteration check` mode is unset) -> run the pass again with `checking_next_iter` flag set. (This makes is_shared_memory_op look one level deeper so we catch hazards like **iter i+1 reads what iter i writes** and insert the necessary barriers.)
+    * No: noop
 
 
 .. code-block:: sh 
+
    end of step 6, the end of `add_shared_memory_barriers` call.
 
 
