@@ -101,10 +101,9 @@ Corner Cases for split barriers:
 --------------------
 Adding shared memory barriers when producer appear before consumer is straightforward. Things get tricky when nested region ops are involved and dependencies exist between root graph and subgraphs.
 A table below shows how split barriers are inserted for those cases.
-+--------------+----------+-----------+-----------+
-| NestedRegionOp \ Description | signal | waits | when is barriers for subgraph inserted? |
-+--------------+----------+-----------+-----------+
-| Iterate | subgraph prolog | subgraph epilog | when finish the second pass (exit check-next-iter mode) |
-+--------------+----------+-----------+-----------+ 
-| Conditional | subgraph prolog / subgraph epilog  | subgraph prolog / subgraph epilog | when producers or consumers are in the graph |
-+--------------+----------+-----------+-----------+
+
+| NestedRegionOp | Description                | signal                     | waits                      | when are barriers for subgraph inserted?                       |
+|----------------|----------------------------|----------------------------|----------------------------|----------------------------------------------------------------|
+| Iterate        | subgraph prolog / epilog   | subgraph prolog            | subgraph epilog            | when finishing the second pass (exit check-next-iter mode)     |
+| Conditional    | subgraph prolog / epilog   | subgraph prolog / epilog   | subgraph prolog / epilog   | when producers or consumers are in the graph                   |
+
