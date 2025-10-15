@@ -80,7 +80,7 @@ The heuristic walks the graph in pre-order and proceeds as follows:
 Visualization: add_shared_memory_barriers
 --------------------
 - Basic barrier
-.. image:: basic\ barrier.gif
+.. image:: basic_barrier_vis.gif
     :width: 400
     :alt: Basic barrier GIF
     :align: center
@@ -88,7 +88,7 @@ Visualization: add_shared_memory_barriers
  The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
 
 - Split barrier
-.. image:: split\ barriers.gif
+.. image:: split_barrier_vis.gif
     :width: 400
     :alt: Split barrier GIF
     :align: center
