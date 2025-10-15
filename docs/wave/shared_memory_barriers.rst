@@ -86,7 +86,7 @@ Visualization: add_shared_memory_barriers
     :alt: Basic barrier GIF
     :align: center
 
- The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
+The above gif is an visaul illustration for inserting shared memory barriers between producers and consumers.
 
 - Split barrier
 
@@ -95,9 +95,4 @@ Visualization: add_shared_memory_barriers
     :alt: Split barrier GIF
     :align: center
 
- The above gif is an visaul illustration for inserting split barriers between producers and consumers.
-
-.. image:: conv_example.gif
-    :width: 400
-    :alt: Conv gif
-    :align: center
+The above gif is an visaul illustration for inserting split barriers between producers and consumers.
