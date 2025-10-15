@@ -104,7 +104,7 @@ A table below shows how split barriers are inserted for those cases.
 +--------------+----------+-----------+-----------+
 | NestedRegionOp \ Description | signal | waits | when is barriers for subgraph inserted? |
 +--------------+----------+-----------+-----------+
-| Iterate | subgraph prolog | subgraph epilog | when finish the second pass (exit check-next-iter mode)
-+--------------+----------+-----------+-----------+
-| Conditional | subgraph prolog / subgraph epilog  | subgraph prolog / subgraph epilog | when producers or consumers are in the graph
+| Iterate | subgraph prolog | subgraph epilog | when finish the second pass (exit check-next-iter mode) |
++--------------+----------+-----------+-----------+ 
+| Conditional | subgraph prolog / subgraph epilog  | subgraph prolog / subgraph epilog | when producers or consumers are in the graph |
 +--------------+----------+-----------+-----------+
