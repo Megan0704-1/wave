@@ -38,28 +38,37 @@ The heuristic walks the graph in pre-order and proceeds as follows:
 1. Is this a shared_memory_op?
 
    * Yes: get a "memory key" (fx node object) representing the shared memory, this keeps track of the last op taking ownership of this memory region. - jump to step 2.
+
    * No: thank you, next. - jump to 0.
 
 2. Do we need a barrier relative to the last op on this memory?
 
    * Yes:
      Check if a barrier already exists in between producer and consumer.
+
      * Yes: If a producer is an async op (GatherToLDS), then we upgrade the barrier (setting wait_async_ops=True), otherwise, noop.
+
      * No:
        Does this target support split barriers?
+
        * Yes:
          * Producer and consumer in a same graph: insert Signal after producer and wait before consumer.
          * Producer and consumer not in a same graph: defer split barrier insertion to the `add_signal_wait_to_subgraph` pass.
+
        * No: insert a single SharedMemoryBarrier before the consumer. Set `wait_async_ops` if needed.
 
    * No: noop
-.. end of step 2, jump to setp 3.
+
+.. code-block:: sh 
+    end of step 2, jump to setp 3.
 
 3. Update state
 
    * update the last op that is taking ownership of the memory region.
    * if we just saw a `GatherToLDS` op, set `state.is_async` to True, otherwise, after inserting a barrier, set it back to False.
-.. end of step 3, jump to step 4.
+
+.. code-block:: sh 
+    end of step 3, jump to step 4.
 
 4. Is this op if of type NestedRegionOp (Iterate / Conditional)?
 
@@ -71,18 +80,24 @@ The heuristic walks the graph in pre-order and proceeds as follows:
            * case 2: producers are not updated in the subgraph - jump to step 1
            * case 3: `next-iteration check` mode is set (by the Iterate node) - jump to step 1
            * otherwise: calls `add_signal_wait_to_subgraph` pass for inserting signal at subgraph prolog and wait at subgraph epilog for synchronization.
+
    * No: noop
 
-.. end of step 4, jump to step 0.
+.. code-block:: sh 
+    end of step 4, jump to step 0.
 
-.. end of setp 0, jump to step 6.
+.. code-block:: sh 
+   end of setp 0, jump to step 6.
 
 6. Is this graph a reductin graph? (ref. `is_reduction_subgraph`)
 
    * Yes:
      * If we are not already checking the next iteration (i.e. `next-iteration check` mode is unset) -> run the pass again with `checking_next_iter` flag set. (This makes is_shared_memory_op look one level deeper so we catch hazards like **iter i+1 reads what iter i writes** and insert the necessary barriers.)
+
    * No: noop
 
-.. end of step 6, the end of `add_shared_memory_barriers` call.
+
+.. code-block:: sh 
+   end of step 6, the end of `add_shared_memory_barriers` call.
 
 
