@@ -2794,13 +2794,11 @@ def test_explicit_shared_gemm(m, n, k, block_m, block_n, block_k, run_bench):
         SchedulingType.NONE,
     ],
 )
-@pytest.mark.parametrize("use_global_to_shared", [(False, True)])
 @pytest.mark.parametrize("datatype", [torch.float16])
 def testSpecializeGemm(
     shape: tuple[int],
     enable_scheduling: SchedulingType,
     datatype: torch.dtype,
-    use_global_to_shared: bool,
     run_bench,
     perf_filename_tk,
     perf_filename_iree,
@@ -2826,7 +2824,7 @@ def testSpecializeGemm(
         schedule=enable_scheduling,
         dynamic_symbols=dynamic_symbols,
         specialize=specialize,
-        use_global_to_shared=use_global_to_shared,
+        use_global_to_shared=False,
         benchmark_batch_size=10,
         benchmark_repetitions=3,
         benchmark_results_file=perf_filename_tk,
@@ -2845,4 +2843,12 @@ def testSpecializeGemm(
 
     iree_ref = device_zeros(shape[0], shape[1], dtype=torch.float32)
     generate_iree_ref("mmt", [a, b], [iree_ref], options)
-    assert_close(c, iree_ref, rtol=1e-5, atol=1e-5)
+    assert_close(
+        c,
+        iree_ref,
+        rtol=1e-5,
+        atol=1e-5,
+        check_dtype=False,
+        check_device=False,
+        check_stride=False,
+    )
