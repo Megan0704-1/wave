@@ -2783,3 +2783,66 @@ def test_explicit_shared_gemm(m, n, k, block_m, block_n, block_k, run_bench):
 
     expected = torch.matmul(a, b.t())
     assert_close(c.to(torch.float16), expected, rtol=1e-2, atol=1e-2)
+
+
+@require_e2e
+@require_gfx1250
+@pytest.mark.parametrize("shape", get_test_shapes("test_gemm"))
+@pytest.mark.parametrize(
+    "enable_scheduling",
+    [
+        SchedulingType.NONE,
+    ],
+)
+@pytest.mark.parametrize("use_global_to_shared", [(False, True)])
+@pytest.mark.parametrize("datatype", [torch.float16])
+def testSpecializeGemm(
+    shape: tuple[int],
+    enable_scheduling: SchedulingType,
+    datatype: torch.dtype,
+    use_global_to_shared: bool,
+    run_bench,
+    perf_filename_tk,
+    perf_filename_iree,
+):
+    mfma_variant = MMAType.GFX1250_F32_16x16x32_F16
+    threads_per_wave = 32
+    specialize = True
+    n_service_waves = 1
+
+    gemm, hyperparams, dynamic_symbols = get_gemm_kernel(
+        shape,
+        False,
+        mfma_variant,
+        datatype,
+        threads_per_wave=threads_per_wave,
+        n_service_waves=n_service_waves,
+    )
+
+    options = WaveCompileOptions(
+        subs=hyperparams,
+        canonicalize=True,
+        run_bench=run_bench,
+        schedule=enable_scheduling,
+        dynamic_symbols=dynamic_symbols,
+        specialize=specialize,
+        use_global_to_shared=use_global_to_shared,
+        benchmark_batch_size=10,
+        benchmark_repetitions=3,
+        benchmark_results_file=perf_filename_tk,
+    )
+
+    options = set_default_run_config(options)
+    gemm = wave_compile(options, gemm)
+
+    a = device_randn(shape[0], shape[2], dtype=datatype)
+    b = device_randn(shape[1], shape[2], dtype=datatype)
+    c = device_zeros(shape[0], shape[1], dtype=torch.float32)
+    gemm(a, b, c)
+
+    if run_bench:
+        options.benchmark_results_file = perf_filename_iree
+
+    iree_ref = device_zeros(shape[0], shape[1], dtype=torch.float32)
+    generate_iree_ref("mmt", [a, b], [iree_ref], options)
+    assert_close(c, iree_ref, rtol=1e-5, atol=1e-5)
