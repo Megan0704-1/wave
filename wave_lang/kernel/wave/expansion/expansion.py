@@ -489,7 +489,7 @@ def add_get_results(trace: CapturedTrace):
 
             for subgraph in trace.region_graph.subgraphs.values():
                 for node in subgraph.nodes:
-                    if node.meta.get("lifted", None) == iterate.fx_node:
+                    if node.meta.get("lifted", None) == region_op.fx_node:
                         node.meta["lifted"] = get_result.fx_node
 
 
@@ -864,28 +864,6 @@ def fixup_iterate_nodes(
         )
 
 
-<<<<<<< HEAD
-        for result_index, get_item in iterate_info.get_results.items():
-            get_item.graph.inserting_before(get_item.fx_node)
-            get_result = GetResult(get_item.value, result_index).add_to_graph(
-                get_item.graph, get_item.type, loc=get_item.location
-            )
-            get_result.name = get_item.fx_node.name
-            get_result.index = get_item.index
-            get_result = get_custom(get_result)
-            get_item.replace_all_uses_with(get_result)
-            nodes_to_erase.append(get_item)
-
-        remove_original_nodes(return_vals)
-
-    for node in nodes_to_erase:
-        if not node.fx_node.users:
-            node.erase()
-
-    # For conditional nodes, update the condition to use the expanded nodes.
-    for conditional in trace.walk(lambda x: isinstance(get_custom(x), Conditional)):
-        condition = get_custom(conditional).condition
-=======
 def fixup_conditional_nodes(
     trace: CapturedTrace,
     expansion_context: ExpansionContext,
@@ -902,7 +880,6 @@ def fixup_conditional_nodes(
 
         # Update condition if it was expanded
         condition = conditional.condition
->>>>>>> 8ff6ddaf (Add optional return values support for Conditional nodes)
         new_condition = None
         for key, value in expansion_context.expansion_context.items():
             if key.node.fx_node == condition:
