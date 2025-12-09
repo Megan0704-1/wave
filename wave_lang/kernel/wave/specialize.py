@@ -75,6 +75,7 @@ from .utils.general_utils import (
 )
 from .utils.classes import GemmOperationType
 from .utils.symbol_utils import get_induction_symbol
+from .utils.graph_utils import move_node_after
 
 from .scheduling.scheduler_utils import (
     GemmScheduler,
@@ -289,23 +290,18 @@ class Specialist(GemmScheduler):
         graph: fx.Graph,
         nodes: List[fx.Node],
         subs: dict[IndexSymbol, IndexSequence],
-        new_writes,
-        write_record,
     ):
         """
-        Has side-effect to graph, new_writes and write_record.
+        Has side-effect to graph.
 
         Args:
             graph: A graph to add nodes to.
             nodes: A list of nodes to add to the graph.
             subs: Index modifier when copying nodes to the graph.
-            new_writes: The newly copied write ops, where we later need to update_write_dependencies for.
-            write_record: A list of newly copied write nodes (ordered).
 
         Expect Behavior:
             0. Copy each node in nodes to the graph.
             1. Adjust index by the provided subs.
-            2. Update new_writes and write_record if it is a Write node.
         """
 
         def new_index(index, shift_subs):
@@ -320,10 +316,6 @@ class Specialist(GemmScheduler):
             )
             new_node.index = new_index(node.index, subs)
             node_map[node] = new_node.fx_node
-
-            if isinstance(custom, Write):
-                new_writes[custom.memory].append(new_node.fx_node)
-                write_record.append(new_node.fx_node)
 
     def get_ops_of_type(self, operation_type: GemmOperationType) -> List[fx.Node]:
         """
@@ -503,24 +495,32 @@ class Specialist(GemmScheduler):
         load_graph.parent_op = is_load_cond
 
         # duplicate nodes
-        new_writes = defaultdict(list)
-        write_record = []
         for i in range(self.waves_per_block[0], 0, -1):
             shift_subs = {THREAD_1: THREAD_1 - i}
 
-            self.add_nodes_to_graph(
-                load_graph, nodes, shift_subs, new_writes, write_record
-            )
+            self.add_nodes_to_graph(load_graph, nodes, shift_subs)
 
-            dup_times = self.waves_per_block[0] - i
+        # move all local writes after global reads
+        new_writes = defaultdict(list)
+        write_record = []
+        last_global_read = None
+        for node in reversed(load_graph.nodes):
+            if not last_global_read and isinstance(get_custom(node), Read):
+                last_global_read = node
+            if last_global_read and isinstance(get_custom(node), Write):
+                node = move_node_after(node, last_global_read)
+            if isinstance(get_custom(node), Write):
+                write_record.insert(0, node)
+                new_writes[get_custom(node).memory].append(node)
 
         # add split barriers to load subgraph
         self.add_load_split_barrier(
-            load_graph, iterate_op, 0, write_record[0], write_record[-1]
+            load_graph, iterate_op, write_record[0], write_record[-1]
         )
 
         # close the graph with empty output
-        load_graph.output(None)
+        with load_graph.inserting_after():
+            load_graph.output(None)
 
         # update trace and root graph
         self.trace.add_subgraph(load_graph_name, load_graph)
@@ -631,7 +631,6 @@ class Specialist(GemmScheduler):
         self,
         subgraph: fx.Graph,
         iterate_op: CustomOp,
-        dup_times: int,
         first_lw: fx.Node,
         last_lw: fx.Node,
     ) -> None:
@@ -677,9 +676,6 @@ class Specialist(GemmScheduler):
                 ...
         """
 
-        # first load wave id
-        start_load_wid = self.barUB - 1
-
         # induction symbol
         iv = get_induction_symbol(iterate_op.axis)
 
@@ -688,7 +684,7 @@ class Specialist(GemmScheduler):
             for offset in range(1, self.barUB):  # self.waves_per_block[0] + 1):
 
                 # i is the range of possible barrier id this load wave is helping out
-                i = offset  # dup_times * self.waves_per_block[0] + offset
+                i = offset
 
                 # declare graph
                 wid_wait_graph = fx.Graph()
@@ -703,12 +699,13 @@ class Specialist(GemmScheduler):
                 )
 
                 # calculate which compute wid this load wid is helping with
-                compute_wid = (
-                    self.wave_id % start_load_wid
-                ) + dup_times * self.waves_per_block[0]
+                compute_wid = self.wave_id % self.waves_per_block[0]
+                target_wid = (i - 1) % self.waves_per_block[0]
 
                 # add condition entry to parent graph
-                cond_expr = sympy.And(sympy.Eq(compute_wid, i - 1), sympy.Ne(iv, 0))
+                cond_expr = sympy.And(
+                    sympy.Eq(compute_wid, target_wid), sympy.Ne(iv, 0)
+                )
 
                 wait_cond_op = Conditional(
                     cond_expr,
@@ -728,7 +725,7 @@ class Specialist(GemmScheduler):
             for offset in range(1, self.barUB):  # self.waves_per_block[0] + 1):
 
                 # i is the range of possible barrier id this load wave is helping out
-                i = offset  # dup_times * self.waves_per_block[0] + offset
+                i = offset
 
                 # declare graph
                 wid_signal_graph = fx.Graph()
@@ -743,12 +740,11 @@ class Specialist(GemmScheduler):
                 )
 
                 # calculate which compute wid this load wid is helping with
-                compute_wid = (
-                    self.wave_id % start_load_wid
-                ) + dup_times * self.waves_per_block[0]
+                compute_wid = self.wave_id % self.waves_per_block[0]
+                target_wid = (i - 1) % self.waves_per_block[0]
 
                 # add condition entry to parent graph
-                cond_expr = sympy.Eq(compute_wid, i - 1)
+                cond_expr = sympy.Eq(compute_wid, target_wid)
 
                 signal_cond_op = Conditional(
                     cond_expr,
